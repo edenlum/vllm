@@ -337,7 +337,7 @@ class LlamaModel(nn.Module):
             make_empty_intermediate_tensors_factory(
                 ["hidden_states", "residual"], config.hidden_size))
 
-        # Add flags and storage for activation collection
+        # Add a flag to control activation collection
         self.collect_activations = False
         self.activations = {}
 
@@ -360,7 +360,7 @@ class LlamaModel(nn.Module):
                 hidden_states = self.get_input_embeddings(input_ids)
             residual = None
             
-            # Store embedding activations if collecting
+            # Store input embeddings if collecting activations
             if self.collect_activations:
                 self.activations['embedding'] = hidden_states.detach().clone()
         else:
