@@ -1426,7 +1426,7 @@ class LLM:
         wrapper = executor.driver_worker
         worker = wrapper.worker
         runner = worker.model_runner
-        model = runner.model
+        model = runner.model.model
         
         # Enable activation collection
         model.start_collecting_activations()
