@@ -1412,3 +1412,32 @@ class LLM:
         # This is necessary because some requests may be finished earlier than
         # its previous requests.
         return sorted(outputs, key=lambda x: int(x.request_id))
+
+    def generate_with_activations(
+        self,
+        prompts: Union[PromptType, Sequence[PromptType]],
+        sampling_params: Optional[Union[SamplingParams, Sequence[SamplingParams]]] = None,
+        use_tqdm: bool = True,
+    ) -> Tuple[List[RequestOutput], Dict[str, torch.Tensor]]:
+        """Generate completions and collect activations for the input prompts."""
+        
+        # Get to the actual model through the abstraction layers
+        executor = self.llm_engine.model_executor
+        wrapper = executor.driver_worker
+        worker = wrapper.worker
+        runner = worker.model_runner
+        model = runner.model
+        
+        # Enable activation collection
+        model.start_collecting_activations()
+        
+        # Run normal generation
+        outputs = self.generate(prompts, sampling_params, use_tqdm)
+        
+        # Get collected activations
+        activations = model.get_activations()
+        
+        # Disable activation collection
+        model.stop_collecting_activations()
+        
+        return outputs, activations

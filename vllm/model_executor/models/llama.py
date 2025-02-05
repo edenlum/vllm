@@ -337,6 +337,10 @@ class LlamaModel(nn.Module):
             make_empty_intermediate_tensors_factory(
                 ["hidden_states", "residual"], config.hidden_size))
 
+        # Add flags and storage for activation collection
+        self.collect_activations = False
+        self.activations = {}
+
     def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
         return self.embed_tokens(input_ids)
 
@@ -355,6 +359,10 @@ class LlamaModel(nn.Module):
             else:
                 hidden_states = self.get_input_embeddings(input_ids)
             residual = None
+            
+            # Store embedding activations if collecting
+            if self.collect_activations:
+                self.activations['embedding'] = hidden_states.detach().clone()
         else:
             assert intermediate_tensors is not None
             hidden_states = intermediate_tensors["hidden_states"]
@@ -363,8 +371,12 @@ class LlamaModel(nn.Module):
         for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
             hidden_states, residual = layer(positions, hidden_states,
-                                            kv_caches[i - self.start_layer],
-                                            attn_metadata, residual)
+                                          kv_caches[i - self.start_layer],
+                                          attn_metadata, residual)
+            
+            # Store layer outputs if collecting activations
+            if self.collect_activations:
+                self.activations[f'layer_{i}'] = hidden_states.detach().clone()
 
         if not get_pp_group().is_last_rank:
             return IntermediateTensors({
@@ -373,7 +385,25 @@ class LlamaModel(nn.Module):
             })
 
         hidden_states, _ = self.norm(hidden_states, residual)
+        
+        # Store final normalized output if collecting activations
+        if self.collect_activations:
+            self.activations['final'] = hidden_states.detach().clone()
+            
         return hidden_states
+
+    def start_collecting_activations(self):
+        """Enable activation collection."""
+        self.collect_activations = True
+        self.activations = {}
+
+    def stop_collecting_activations(self):
+        """Disable activation collection."""
+        self.collect_activations = False
+
+    def get_activations(self):
+        """Return collected activations."""
+        return self.activations
 
     def load_weights(self, weights: Iterable[Tuple[str,
                                                    torch.Tensor]]) -> Set[str]:
